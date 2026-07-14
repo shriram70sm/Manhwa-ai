@@ -9,12 +9,13 @@ services:
       - "8080:8080"
     env_file:
       - ./backend/.env
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672//
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
+      - rabbitmq
     command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
-    # ⚡ NEW: Share the 'temp' folder with the container
-    # volumes:
-    #   - ./backend/temp:/app/temp
 
   # 2. The Worker
   worker:
@@ -22,16 +23,28 @@ services:
     container_name: manhwa_worker
     env_file:
       - ./backend/.env
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672//
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
-    command: celery -A app.celery_worker worker --loglevel=info --concurrency=5
-    # ⚡ NEW: Share the SAME folder so Worker can see the PDF
-    # volumes:
-    #   - ./backend/temp:/app/temp
+      - rabbitmq
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
 
-  # 3. The Broker
+  # 3. Result Backend
   redis:
     image: "redis:alpine"
     container_name: manhwa_redis
     ports:
       - "6379:6379"
+
+  # 4. Task Broker
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: manhwa_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
